@@ -33,7 +33,7 @@ export async function POST(req: NextRequest): Promise<void | Response> {
     // 调用 Python 脚本
     const scriptPath = join(process.cwd(), 'scripts', 'remove_bg.py');
     
-    return await new Promise<void | Response>((resolve) => {
+    return await new Promise<Response>((resolve) => {
       const pythonProcess = spawn('python', [
         scriptPath,
         '--input', inputPath,
