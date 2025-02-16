@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import sharp from 'sharp';
 
+// 配置 Edge Runtime
+export const runtime = 'edge';
+
 export async function POST(request: NextRequest): Promise<void | NextResponse> {
   try {
     console.log('Smart crop API called');
@@ -80,7 +83,8 @@ export async function POST(request: NextRequest): Promise<void | NextResponse> {
 
         return new NextResponse(croppedImage, {
           headers: {
-            'Content-Type': 'image/png'
+            'Content-Type': 'image/png',
+            'Cache-Control': 'no-store'
           }
         });
       }
@@ -89,7 +93,8 @@ export async function POST(request: NextRequest): Promise<void | NextResponse> {
     console.log('No significant crop area found, returning original');
     return new NextResponse(buffer, {
       headers: {
-        'Content-Type': 'image/png'
+        'Content-Type': file.type,
+        'Cache-Control': 'no-store'
       }
     });
 

@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import sharp from 'sharp';
 
+// 配置 Edge Runtime
+export const runtime = 'edge';
+
 export async function POST(request: NextRequest): Promise<NextResponse | void> {
   try {
     const formData = await request.formData();
