@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import os from 'os';
 import path from 'path';
 
-export async function POST(req: NextRequest): Promise<Response> {
+export async function POST(req: NextRequest): Promise<void | Response> {
   try {
     const formData = await req.formData();
     const file = formData.get('file') as File;
