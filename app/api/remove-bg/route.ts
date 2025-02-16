@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { removeBackground } from '@/services/backgroundRemoval';
+import sharp from 'sharp';
 
+// 配置 Edge Runtime
 export const runtime = 'edge';
 
 export async function POST(req: NextRequest): Promise<Response> {
@@ -15,10 +18,46 @@ export async function POST(req: NextRequest): Promise<Response> {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    // 返回原始图片，客户端将使用 Canvas 进行背景移除
-    return new NextResponse(buffer, {
+    // 使用 sharp 将图片转换为 ImageData
+    const image = sharp(buffer);
+    const metadata = await image.metadata();
+    const { width, height } = metadata;
+
+    if (!width || !height) {
+      throw new Error('Invalid image dimensions');
+    }
+
+    // 将图片转换为 RGBA 格式
+    const rawData = await image
+      .ensureAlpha()
+      .raw()
+      .toBuffer();
+
+    // 创建 ImageData
+    const imageData = new ImageData(
+      new Uint8ClampedArray(rawData),
+      width,
+      height
+    );
+
+    // 移除背景
+    const processedImageData = await removeBackground(imageData);
+
+    // 将处理后的 ImageData 转换回 Buffer
+    const processedBuffer = await sharp(processedImageData.data, {
+      raw: {
+        width: processedImageData.width,
+        height: processedImageData.height,
+        channels: 4
+      }
+    })
+      .png()
+      .toBuffer();
+
+    // 返回处理后的图片
+    return new NextResponse(processedBuffer, {
       headers: {
-        'Content-Type': file.type,
+        'Content-Type': 'image/png',
         'Cache-Control': 'no-store'
       }
     });

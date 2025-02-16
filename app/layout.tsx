@@ -2,14 +2,14 @@ import type React from "react"
 import "./globals.css"
 import type { Metadata } from "next"
 import { Inter } from "next/font/google"
+import { BackgroundRemovalProvider } from "@/components/BackgroundRemovalProvider"
 
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Remove Background from Image | removebg",
-  description:
-    "Remove image backgrounds automatically in 5 seconds with just one click. Don't spend hours manually picking pixels. Upload your photo now & see the magic.",
-    generator: 'v0.dev'
+  title: "Magic Crop",
+  description: "Image editing tool with AI-powered features",
+  generator: 'v0.dev'
 }
 
 export default function RootLayout({
@@ -19,11 +19,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={inter.className}>{children}</body>
+      <body className={inter.className}>
+        <BackgroundRemovalProvider>
+          {children}
+        </BackgroundRemovalProvider>
+      </body>
     </html>
   )
 }
-
-
-
-import './globals.css'

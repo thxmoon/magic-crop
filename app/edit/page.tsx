@@ -472,6 +472,27 @@ export default function EditPage() {
 
       console.log('Removing background from image:', currentImage);
 
+      // 创建一个 canvas 来获取 ImageData
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+        img.src = currentImage;
+      });
+
+      canvas.width = img.width;
+      canvas.height = img.height;
+      ctx?.drawImage(img, 0, 0);
+      const imageData = ctx?.getImageData(0, 0, canvas.width, canvas.height);
+
+      if (!imageData) {
+        throw new Error('Failed to get image data');
+      }
+
       // 获取图片文件
       let imageBlob;
       if (currentImage.startsWith('data:')) {
@@ -500,28 +521,28 @@ export default function EditPage() {
         throw new Error('Failed to remove background');
       }
 
+      // 获取处理后的图片
       const processedBlob = await result.blob();
-      const imageUrl = URL.createObjectURL(processedBlob);
+      const processedUrl = URL.createObjectURL(processedBlob);
 
-      // 如果之前没有处理过的图片，保存当前图片为原图
-      if (!processedImage) {
-        setOriginalImage(currentImage);
-      }
-
-      // 更新移除背景后的图片（带透明背景的前景层）
-      setRemovedBgImage(imageUrl);
-      // 更新显示的图片
-      setProcessedImage(imageUrl);
+      // 更新状态
+      setRemovedBgImage(processedUrl);
       setHasRemovedBackground(true);
-      setActiveTab("result");
 
       // 添加到历史记录
-      const newHistory = [...history.slice(0, currentIndex + 1), imageUrl];
+      const newHistory = [...history.slice(0, currentIndex + 1), processedUrl];
       setHistory(newHistory);
       setCurrentIndex(newHistory.length - 1);
 
+      // 更新处理后的图片
+      setProcessedImage(processedUrl);
     } catch (error) {
       console.error('Error removing background:', error);
+      toast({
+        title: "Error",
+        description: "Failed to remove background. Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }

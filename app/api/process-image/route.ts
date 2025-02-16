@@ -1,29 +1,36 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from "next/server"
+import sharp from "sharp"
 
-export const runtime = 'edge';
-
-export async function POST(req: NextRequest): Promise<Response> {
+export async function POST(req: NextRequest): Promise<void | Response> {
   try {
-    const formData = await req.formData();
-    const file = formData.get('file') as File;
+    const formData = await req.formData()
+    const file = formData.get("file") as File
 
     if (!file) {
-      return new NextResponse('No file uploaded', { status: 400 });
+      return new NextResponse('No file uploaded', { status: 400 })
     }
 
-    // 获取文件内容
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
+    const buffer = Buffer.from(await file.arrayBuffer())
 
-    // 返回原始图片，客户端将使用 Canvas 进行处理
-    return new NextResponse(buffer, {
-      headers: {
-        'Content-Type': file.type,
-        'Cache-Control': 'no-store'
-      }
-    });
+    try {
+      // 使用 sharp 库进行图像处理
+      const processedImage = await sharp(buffer)
+        .removeBackground() // 假设我们有一个自定义的背景移除函数
+        .toBuffer()
+
+      // 返回处理后的图像
+      return new NextResponse(processedImage, {
+        headers: {
+          "Content-Type": "image/png",
+          "Content-Disposition": 'attachment; filename="processed-image.png"',
+        },
+      })
+    } catch (error) {
+      console.error("Error processing image:", error)
+      return new NextResponse('Error processing image', { status: 500 })
+    }
   } catch (error) {
-    console.error('Error processing image:', error);
-    return new NextResponse('Error processing image', { status: 500 });
+    console.error("Error processing image:", error)
+    return new NextResponse('Error processing image', { status: 500 })
   }
 }
