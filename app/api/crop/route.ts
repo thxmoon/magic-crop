@@ -1,12 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { spawn } from 'child_process';
-import { join } from 'path';
-import { writeFile, unlink } from 'fs/promises';
-import { v4 as uuidv4 } from 'uuid';
-import os from 'os';
-import path from 'path';
 
-// 配置 Edge Runtime
 export const runtime = 'edge';
 
 export async function POST(req: NextRequest): Promise<Response> {
@@ -28,10 +21,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    // 由于 Edge Runtime 不支持文件系统操作，我们需要修改处理方式
-    // 这里我们可以直接在内存中处理图片，或者使用其他服务
-
-    // 临时返回一个示例响应
+    // 返回原始图片，客户端将使用 Canvas 进行裁剪
     return new NextResponse(buffer, {
       headers: {
         'Content-Type': file.type,
