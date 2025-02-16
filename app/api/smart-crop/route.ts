@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import sharp from 'sharp';
 
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<void | NextResponse> {
   try {
     console.log('Smart crop API called');
     const formData = await request.formData();
     const file = formData.get('file') as File;
     
     if (!file) {
-      return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
+      return new NextResponse(JSON.stringify({ error: 'No file uploaded' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
     }
 
     // 转换文件为 buffer
@@ -95,6 +95,6 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Error in smart crop:', error);
-    return NextResponse.json({ error: 'Failed to process image' }, { status: 500 });
+    return new NextResponse(JSON.stringify({ error: 'Failed to process image' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
 }
