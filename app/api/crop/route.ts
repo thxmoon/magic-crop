@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import os from 'os';
 import path from 'path';
 
-export async function POST(req: NextRequest) {
+export async function POST(req: NextRequest): Promise<Response> {
   try {
     const formData = await req.formData();
     const file = formData.get('file') as File;
@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     // 调用 Python 脚本
     const scriptPath = join(process.cwd(), 'scripts', 'remove_bg.py');
     
-    return new Promise((resolve) => {
+    return await new Promise<Response>((resolve) => {
       const pythonProcess = spawn('python', [
         scriptPath,
         '--input', inputPath,
