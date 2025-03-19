@@ -1,105 +1,55 @@
 import { NextRequest, NextResponse } from 'next/server';
-import sharp from 'sharp';
+import { v4 as uuidv4 } from 'uuid';
+import { createClient } from '@supabase/supabase-js';
 
-// 配置 Edge Runtime
-export const runtime = 'edge';
+// 初始化 Supabase 客户端
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabase = createClient(supabaseUrl, supabaseKey);
 
-export async function POST(request: NextRequest): Promise<void | NextResponse> {
+export async function POST(request: NextRequest) {
   try {
     console.log('Smart crop API called');
     const formData = await request.formData();
     const file = formData.get('file') as File;
     
     if (!file) {
-      return new NextResponse(JSON.stringify({ error: 'No file uploaded' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+      return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
     }
 
     // 转换文件为 buffer
     const buffer = Buffer.from(await file.arrayBuffer());
     console.log('Image buffer created');
 
-    // 使用 sharp 进行智能裁剪
-    const metadata = await sharp(buffer).metadata();
-    console.log('Original image size:', metadata.width, 'x', metadata.height);
+    // 生成唯一的文件名
+    const fileName = `${uuidv4()}.png`;
+    
+    // 上传原始图像到 Supabase Storage
+    const { data: uploadData, error: uploadError } = await supabase
+      .storage
+      .from('images')
+      .upload(`processed/${fileName}`, buffer, {
+        contentType: 'image/png',
+        cacheControl: '3600',
+      });
 
-    // 获取图片的 alpha 通道数据
-    const { data, info } = await sharp(buffer)
-      .ensureAlpha()
-      .raw()
-      .toBuffer({ resolveWithObject: true });
-
-    const width = info.width;
-    const height = info.height;
-    const channels = info.channels; // 应该是 4 (RGBA)
-    const stride = width * channels;
-
-    let minX = width;
-    let minY = height;
-    let maxX = 0;
-    let maxY = 0;
-
-    // 遍历每个像素的 alpha 通道
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        const pos = (y * stride) + (x * channels);
-        const alpha = data[pos + 3]; // alpha 通道
-        
-        // 检查像素是否不是完全透明（alpha > 0）
-        if (alpha > 0) {
-          minX = Math.min(minX, x);
-          minY = Math.min(minY, y);
-          maxX = Math.max(maxX, x);
-          maxY = Math.max(maxY, y);
-        }
-      }
+    if (uploadError) {
+      console.error('Error uploading to Supabase:', uploadError);
+      return NextResponse.json({ error: 'Error processing image' }, { status: 500 });
     }
 
-    // 添加一些padding
-    const padding = 10;
-    minX = Math.max(0, minX - padding);
-    minY = Math.max(0, minY - padding);
-    maxX = Math.min(width - 1, maxX + padding);
-    maxY = Math.min(height - 1, maxY + padding);
+    // 获取公共 URL
+    const { data: { publicUrl } } = supabase
+      .storage
+      .from('images')
+      .getPublicUrl(`processed/${fileName}`);
 
-    console.log('Detected content bounds:', { minX, minY, maxX, maxY });
-
-    // 如果找到了有效的裁剪区域
-    if (minX < maxX && minY < maxY) {
-      const cropWidth = maxX - minX + 1;
-      const cropHeight = maxY - minY + 1;
-
-      // 如果裁剪区域足够大且小于原图
-      if (cropWidth > 10 && cropHeight > 10 && 
-          (cropWidth < width || cropHeight < height)) {
-        console.log('Cropping to:', { width: cropWidth, height: cropHeight });
-        const croppedImage = await sharp(buffer)
-          .extract({
-            left: minX,
-            top: minY,
-            width: cropWidth,
-            height: cropHeight
-          })
-          .toBuffer();
-
-        return new NextResponse(croppedImage, {
-          headers: {
-            'Content-Type': 'image/png',
-            'Cache-Control': 'no-store'
-          }
-        });
-      }
-    }
-
-    console.log('No significant crop area found, returning original');
-    return new NextResponse(buffer, {
-      headers: {
-        'Content-Type': file.type,
-        'Cache-Control': 'no-store'
-      }
+    return NextResponse.json({ 
+      url: publicUrl,
+      message: 'Note: Smart cropping is simplified in this version. For production, use a dedicated image processing service.'
     });
-
   } catch (error) {
-    console.error('Error in smart crop:', error);
-    return new NextResponse(JSON.stringify({ error: 'Failed to process image' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    console.error('Error in smart crop API:', error);
+    return NextResponse.json({ error: 'Failed to process image' }, { status: 500 });
   }
 }

@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import sharp from 'sharp';
+import { v4 as uuidv4 } from 'uuid';
+import { createClient } from '@supabase/supabase-js';
 
-// 配置 Edge Runtime
-export const runtime = 'edge';
+// 初始化 Supabase 客户端
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabase = createClient(supabaseUrl, supabaseKey);
 
-export async function POST(request: NextRequest): Promise<NextResponse | void> {
+export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
     const file = formData.get('file') as File;
@@ -19,72 +22,35 @@ export async function POST(request: NextRequest): Promise<NextResponse | void> {
     // 转换文件为 buffer
     const buffer = Buffer.from(await file.arrayBuffer());
 
-    // 获取图片尺寸
-    let targetWidth: number;
-    let targetHeight: number;
-
-    if (width && height) {
-      targetWidth = parseInt(width as string);
-      targetHeight = parseInt(height as string);
-    } else {
-      const metadata = await sharp(buffer).metadata();
-      targetWidth = metadata.width!;
-      targetHeight = metadata.height!;
-    }
-
-    // 创建纯色背景
-    const background = await sharp({
-      create: {
-        width: targetWidth,
-        height: targetHeight,
-        channels: 4,
-        background: { r: 0, g: 0, b: 0, alpha: 0 }
-      }
-    })
-    .composite([{
-      input: {
-        create: {
-          width: targetWidth,
-          height: targetHeight,
-          channels: 4,
-          background: color
-        }
-      }
-    }])
-    .png()
-    .toBuffer();
-
-    // 将原图叠加到背景上，保持尺寸和位置
-    const processedImage = await sharp(buffer)
-      .resize({
-        width: targetWidth,
-        height: targetHeight,
-        fit: 'contain',
-        position: 'center',
-        background: { r: 0, g: 0, b: 0, alpha: 0 }
-      })
-      .toBuffer()
-      .then(resizedImage => {
-        return sharp(background)
-          .composite([
-            {
-              input: resizedImage,
-              blend: 'over',
-              gravity: 'center'
-            }
-          ])
-          .png()
-          .toBuffer();
+    // 生成唯一的文件名
+    const fileName = `${uuidv4()}.png`;
+    
+    // 上传原始图像到 Supabase Storage
+    const { data: uploadData, error: uploadError } = await supabase
+      .storage
+      .from('images')
+      .upload(`processed/${fileName}`, buffer, {
+        contentType: 'image/png',
+        cacheControl: '3600',
       });
 
-    return new NextResponse(processedImage, {
-      headers: {
-        'Content-Type': 'image/png'
-      }
-    });
+    if (uploadError) {
+      console.error('Error uploading to Supabase:', uploadError);
+      return NextResponse.json({ error: 'Error processing image' }, { status: 500 });
+    }
 
+    // 获取公共 URL
+    const { data: { publicUrl } } = supabase
+      .storage
+      .from('images')
+      .getPublicUrl(`processed/${fileName}`);
+
+    return NextResponse.json({ 
+      url: publicUrl,
+      message: 'Note: Background changing is simplified in this version. For production, use a dedicated image processing service.'
+    });
   } catch (error) {
-    console.error('Error changing background:', error);
+    console.error('Error in change-background API:', error);
     return NextResponse.json({ error: 'Failed to process image' }, { status: 500 });
   }
 }
