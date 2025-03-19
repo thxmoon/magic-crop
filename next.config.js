@@ -13,6 +13,14 @@ const nextConfig = {
       });
     }
     
+    // 添加环境变量以禁用 WebGPU
+    config.plugins.push(
+      new config.webpack.DefinePlugin({
+        'globalThis.navigator.gpu': 'undefined',
+        'navigator.gpu': 'undefined',
+      })
+    );
+    
     return config;
   },
 }
