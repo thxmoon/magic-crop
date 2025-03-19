@@ -144,7 +144,7 @@ interface HistoryItem {
 }
 
 export default function EditPage() {
-  const [activeTab, setActiveTab] = useState<"original" | "result">("result")
+  const [activeTab, setActiveTab] = useState<"original" | "result" | "background" | null>("result")
   const [showOriginal, setShowOriginal] = useState(false)
   const [originalImage, setOriginalImage] = useState<string | null>(null)
   const [processedImage, setProcessedImage] = useState<string | null>(null)
@@ -1161,7 +1161,7 @@ export default function EditPage() {
                       <div className="transparent-grid">
                         <img
                           ref={imageRef}
-                          src={showOriginal ? originalImage : processedImage || originalImage}
+                          src={showOriginal ? originalImage || undefined : processedImage || originalImage || undefined}
                           alt={showOriginal ? "Original" : "Processed"}
                           className="max-w-full max-h-[60vh] w-auto h-auto"
                           style={{ display: 'block' }}
