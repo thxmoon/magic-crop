@@ -4,7 +4,7 @@ const nextConfig = {
     domains: ['gwocgomtdgfqtrbuomyt.supabase.co'],
     unoptimized: true,
   },
-  webpack: (config, { isServer }) => {
+  webpack: (config, { isServer, webpack }) => {
     // 排除原生模块
     if (isServer) {
       config.externals.push({
@@ -15,7 +15,7 @@ const nextConfig = {
     
     // 添加环境变量以禁用 WebGPU
     config.plugins.push(
-      new config.webpack.DefinePlugin({
+      new webpack.DefinePlugin({
         'globalThis.navigator.gpu': 'undefined',
         'navigator.gpu': 'undefined',
       })
