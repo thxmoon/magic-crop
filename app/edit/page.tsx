@@ -981,7 +981,7 @@ export default function EditPage() {
         );
         
         // 过滤掉失败的项和当前正在编辑的图片
-        const validHistoryItems = historyItems.filter((item): item is HistoryItem => {
+        const validHistoryItems = historyItems.filter((item): item is NonNullable<typeof item> => {
           return item !== null;
         });
         
