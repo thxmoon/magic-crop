@@ -4,6 +4,7 @@ import { useCallback, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useDropzone } from 'react-dropzone'
 import { Upload } from 'lucide-react'
+import { StorageService } from '@/services/storage'
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 
@@ -22,18 +23,18 @@ export function ImageUpload() {
 
     setUploading(true)
     try {
-      const reader = new FileReader()
+      const storageService = new StorageService()
+      const { url, error } = await storageService.uploadImage(file)
       
-      reader.onloadend = () => {
-        // Save to localStorage
-        if (typeof reader.result === 'string') {
-          localStorage.setItem('editImage', reader.result)
-          // Navigate to edit page
-          router.push('/edit')
-        }
+      if (error) {
+        throw error
       }
 
-      reader.readAsDataURL(file)
+      if (url) {
+        router.push(`/edit?image=${encodeURIComponent(url)}`)
+      } else {
+        throw new Error('Failed to get upload URL')
+      }
     } catch (error) {
       console.error('Error uploading file:', error)
       alert('Error uploading file. Please try again.')

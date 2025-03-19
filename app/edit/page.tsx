@@ -133,7 +133,7 @@ interface HistoryItem {
   image: string;
   thumbnail: string;
   timestamp: number;
-  editState?: {
+  editState: {
     processedImage: string | null;
     removedBgImage: string | null;
     hasRemovedBackground: boolean;
@@ -152,13 +152,58 @@ export default function EditPage() {
   const [isCropping, setIsCropping] = useState(false)
   const [cropBox, setCropBox] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
   const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null)
-  const [dragType, setDragType] = useState<"move" | "nw" | "ne" | "sw" | "se" | null>(null)
-  const [cropSize, setCropSize] = useState<{ width: number; height: number } | null>(null);
-  const [foregroundLayer, setForegroundLayer] = useState<string | null>(null);  // 前景层（移除背景后的图片）
-  const [backgroundColor, setBackgroundColor] = useState<string | null>(null);  // 背景色
-  const [isLoading, setIsLoading] = useState(false);  // 添加 loading 状态
+  const [dragType, setDragType] = useState<"move" | "nw" | "ne" | "sw" | "se" | "n" | "s" | "w" | "e" | null>(null)
+  const [cropSize, setCropSize] = useState<{ width: number; height: number } | null>(null)
+  const [foregroundLayer, setForegroundLayer] = useState<string | null>(null)
+  const [backgroundColor, setBackgroundColor] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
   const imageRef = useRef<HTMLImageElement>(null)
   const cropRef = useRef<HTMLDivElement>(null)
+
+  // 从 URL 参数获取图片
+  const [urlParam, setUrlParam] = useState<string | null>(null);
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
+  
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const imageUrl = params.get('image');
+    if (imageUrl) {
+      const decodedUrl = decodeURIComponent(imageUrl);
+      console.log('Loading image from URL parameter:', decodedUrl);
+      setUrlParam(decodedUrl);
+      setOriginalImage(decodedUrl);
+      setProcessedImage(decodedUrl);
+      
+      // 创建一个新的历史记录项
+      createThumbnail(decodedUrl).then(thumbnail => {
+        const currentTimestamp = Date.now();
+        const newHistoryItem: HistoryItem = {
+          id: `${currentTimestamp}-${Math.random()}`,
+          image: decodedUrl,
+          thumbnail,
+          timestamp: currentTimestamp,
+          editState: {
+            processedImage: decodedUrl,
+            removedBgImage: null,
+            hasRemovedBackground: false,
+            backgroundColor: null,
+            history: [decodedUrl],
+            currentIndex: 0
+          }
+        };
+        
+        // 将新上传的图片放在历史记录的最前面
+        setEditHistory(prev => {
+          // 过滤掉相同URL的图片（如果有）
+          const filtered = prev.filter(item => item.image !== decodedUrl);
+          return [newHistoryItem, ...filtered].sort((a, b) => b.timestamp - a.timestamp);
+        });
+      });
+    }
+    
+    // 标记初始加载完成
+    setInitialLoadComplete(true);
+  }, []);
 
   // 裁剪框控制点类型
   type ControlPoint = 'top-left' | 'top' | 'top-right' | 'right' | 'bottom-right' | 'bottom' | 'bottom-left' | 'left';
@@ -262,60 +307,40 @@ export default function EditPage() {
     setDragStart({ x: mouseX, y: mouseY });
   };
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLImageElement>) => {
-    if (!isCropping || !dragStart || !dragType || !cropBox || !imageRef.current) return;
-
-    const rect = imageRef.current.getBoundingClientRect();
-    const containerRect = imageRef.current.parentElement?.getBoundingClientRect();
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!cropRef.current || !imageRef.current) return
     
-    if (!containerRect) return;
-
-    // 计算相对于容器的鼠标位置
-    const mouseX = e.clientX - containerRect.left;
-    const mouseY = e.clientY - containerRect.top;
-
-    // 计算移动距离
-    const deltaX = mouseX - dragStart.x;
-    const deltaY = mouseY - dragStart.y;
-
-    console.log('Mouse move:', { mouseX, mouseY, deltaX, deltaY });
-
-    // 根据拖动类型更新裁剪框
-    let newBox = { ...cropBox };
-
-    if (dragType === "move") {
-      // 移动整个裁剪框
-      newBox.x = Math.max(0, Math.min(rect.width - cropBox.width, cropBox.x + deltaX));
-      newBox.y = Math.max(0, Math.min(rect.height - cropBox.height, cropBox.y + deltaY));
+    const rect = cropRef.current.getBoundingClientRect()
+    const imageRect = imageRef.current.getBoundingClientRect()
+    
+    // 计算鼠标位置相对于裁剪框的位置
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
+    
+    // 设置控制点类型
+    if (y < 10) {
+      if (x < 10) {
+        setDragType("nw")
+      } else if (x > rect.width - 10) {
+        setDragType("ne")
+      } else {
+        setDragType("n")
+      }
+    } else if (y > rect.height - 10) {
+      if (x < 10) {
+        setDragType("sw")
+      } else if (x > rect.width - 10) {
+        setDragType("se")
+      } else {
+        setDragType("s")
+      }
+    } else if (x < 10) {
+      setDragType("w")
+    } else if (x > rect.width - 10) {
+      setDragType("e")
     } else {
-      // 调整裁剪框大小
-      if (dragType.includes("n")) {
-        const maxY = cropBox.y + cropBox.height - 10;
-        const newY = Math.max(0, Math.min(maxY, cropBox.y + deltaY));
-        newBox.height = cropBox.height - (newY - cropBox.y);
-        newBox.y = newY;
-      }
-      if (dragType.includes("s")) {
-        const newHeight = Math.max(10, Math.min(rect.height - cropBox.y, cropBox.height + deltaY));
-        newBox.height = newHeight;
-      }
-      if (dragType.includes("w")) {
-        const maxX = cropBox.x + cropBox.width - 10;
-        const newX = Math.max(0, Math.min(maxX, cropBox.x + deltaX));
-        newBox.width = cropBox.width - (newX - cropBox.x);
-        newBox.x = newX;
-      }
-      if (dragType.includes("e")) {
-        const newWidth = Math.max(10, Math.min(rect.width - cropBox.x, cropBox.width + deltaX));
-        newBox.width = newWidth;
-      }
+      setDragType("move")
     }
-
-    console.log('New crop box:', newBox);
-
-    // 更新裁剪框和拖动起点
-    setCropBox(newBox);
-    setDragStart({ x: mouseX, y: mouseY });
   };
 
   const handleMouseUp = () => {
@@ -472,27 +497,6 @@ export default function EditPage() {
 
       console.log('Removing background from image:', currentImage);
 
-      // 创建一个 canvas 来获取 ImageData
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-
-      await new Promise((resolve, reject) => {
-        img.onload = resolve;
-        img.onerror = reject;
-        img.src = currentImage;
-      });
-
-      canvas.width = img.width;
-      canvas.height = img.height;
-      ctx?.drawImage(img, 0, 0);
-      const imageData = ctx?.getImageData(0, 0, canvas.width, canvas.height);
-
-      if (!imageData) {
-        throw new Error('Failed to get image data');
-      }
-
       // 获取图片文件
       let imageBlob;
       if (currentImage.startsWith('data:')) {
@@ -521,28 +525,28 @@ export default function EditPage() {
         throw new Error('Failed to remove background');
       }
 
-      // 获取处理后的图片
       const processedBlob = await result.blob();
-      const processedUrl = URL.createObjectURL(processedBlob);
+      const imageUrl = URL.createObjectURL(processedBlob);
 
-      // 更新状态
-      setRemovedBgImage(processedUrl);
+      // 如果之前没有处理过的图片，保存当前图片为原图
+      if (!processedImage) {
+        setOriginalImage(currentImage);
+      }
+
+      // 更新移除背景后的图片（带透明背景的前景层）
+      setRemovedBgImage(imageUrl);
+      // 更新显示的图片
+      setProcessedImage(imageUrl);
       setHasRemovedBackground(true);
+      setActiveTab("result");
 
       // 添加到历史记录
-      const newHistory = [...history.slice(0, currentIndex + 1), processedUrl];
+      const newHistory = [...history.slice(0, currentIndex + 1), imageUrl];
       setHistory(newHistory);
       setCurrentIndex(newHistory.length - 1);
 
-      // 更新处理后的图片
-      setProcessedImage(processedUrl);
     } catch (error) {
       console.error('Error removing background:', error);
-      toast({
-        title: "Error",
-        description: "Failed to remove background. Please try again.",
-        variant: "destructive",
-      });
     } finally {
       setIsLoading(false);
     }
@@ -848,47 +852,70 @@ export default function EditPage() {
       const storageService = new StorageService();
       
       // 上传到 Supabase
-      const imageUrl = await storageService.uploadImage(file);
-      const thumbnail = await createThumbnail(imageUrl);
+      const { url, error } = await storageService.uploadImage(file);
+      
+      if (error || !url) {
+        throw error || new Error('Failed to upload image');
+      }
+      
+      const thumbnail = await createThumbnail(url);
+      const currentTimestamp = Date.now();
       
       const newHistoryItem: HistoryItem = {
-        id: Date.now().toString(),
-        image: imageUrl,
+        id: `${currentTimestamp}-${Math.random()}`,
+        image: url,
         thumbnail,
-        timestamp: Date.now(),
+        timestamp: currentTimestamp,
         editState: {
-          processedImage: imageUrl,
+          processedImage: url,
           removedBgImage: null,
           hasRemovedBackground: false,
           backgroundColor: null,
-          history: [imageUrl],
+          history: [url],
           currentIndex: 0
         }
       };
       
-      setEditHistory(prev => [newHistoryItem, ...prev]);
-      
+      // 更新历史记录，确保新图片在最前面
+      setEditHistory(prev => {
+        // 过滤掉相同URL的图片（如果有）
+        const filtered = prev.filter(item => item.image !== url);
+        return [newHistoryItem, ...filtered].sort((a, b) => b.timestamp - a.timestamp);
+      });
+
       // 设置为当前编辑的图片
-      setOriginalImage(imageUrl);
-      setProcessedImage(imageUrl);
+      setOriginalImage(url);
+      setProcessedImage(url);
       setHasRemovedBackground(false);
       setRemovedBgImage(null);
       setBackgroundColor(null);
-      setHistory([imageUrl]);
+      setHistory([url]);
       setCurrentIndex(0);
+      
+      // 更新 URL 参数，这样刷新页面时仍然会显示当前图片
+      const params = new URLSearchParams(window.location.search);
+      params.set('image', encodeURIComponent(url));
+      window.history.replaceState(
+        {},
+        '',
+        `${window.location.pathname}?${params.toString()}`
+      );
+      
+      // 更新 urlParam 状态
+      setUrlParam(url);
     } catch (error) {
       console.error('Failed to upload image:', error);
+      alert('Failed to upload image. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleSelectHistoryImage = (historyItem: HistoryItem) => {
-    // 先保存当前图片的状态
-    saveCurrentEditState();
+    if (!historyItem) return;
     
-    // 恢复选中图片的状态
     setOriginalImage(historyItem.image);
+    
     if (historyItem.editState) {
       setProcessedImage(historyItem.editState.processedImage);
       setRemovedBgImage(historyItem.editState.removedBgImage);
@@ -909,13 +936,28 @@ export default function EditPage() {
   useEffect(() => {
     const loadHistory = async () => {
       try {
+        // 如果未完成初始加载，则等待
+        if (!initialLoadComplete) {
+          return;
+        }
+        
+        console.log('Loading history, urlParam:', urlParam);
+        console.log('Current originalImage:', originalImage);
+        
         const storageService = new StorageService();
-        const urls = await storageService.getImageHistory();
+        // 获取最近12小时内的图片
+        const urls = await storageService.getRecentImageHistory(12);
         
         // 创建历史记录项
         const historyItems = await Promise.all(
           urls.map(async (url) => {
             try {
+              // 跳过当前正在编辑的图片（来自URL参数的图片）
+              if (urlParam && url === urlParam) {
+                console.log('Skipping URL param image from history:', url);
+                return null;
+              }
+              
               const thumbnail = await createThumbnail(url);
               return {
                 id: Date.now().toString() + Math.random(),
@@ -938,23 +980,43 @@ export default function EditPage() {
           })
         );
         
-        // 过滤掉失败的项
-        const validHistoryItems = historyItems.filter((item): item is HistoryItem => item !== null);
-        setEditHistory(validHistoryItems);
+        // 过滤掉失败的项和当前正在编辑的图片
+        const validHistoryItems = historyItems.filter((item): item is HistoryItem => {
+          return item !== null;
+        });
+        
+        setEditHistory(prev => {
+          // 合并现有历史和新加载的历史
+          const combined = [...prev];
+          
+          // 添加不重复的项
+          validHistoryItems.forEach(item => {
+            const exists = combined.some(existing => existing.image === item.image);
+            if (!exists) {
+              combined.push(item);
+            }
+          });
+          
+          // 按时间戳排序，最新的在前面
+          return combined.sort((a, b) => b.timestamp - a.timestamp);
+        });
 
-        // 如果有历史记录，加载最新的图片
-        if (validHistoryItems.length > 0 && !originalImage) {
+        // 只有在没有从 URL 参数获取图片，并且没有设置原始图片的情况下，才从历史记录中加载
+        if (validHistoryItems.length > 0 && !originalImage && !urlParam) {
+          console.log('Loading from history because no URL param or original image');
           const latestItem = validHistoryItems[0];
-          setOriginalImage(latestItem.image);
-          setProcessedImage(latestItem.image);
+          if (latestItem) {
+            setOriginalImage(latestItem.image);
+            setProcessedImage(latestItem.image);
+          }
         }
       } catch (error) {
         console.error('Failed to load history:', error);
       }
     };
-
+    
     loadHistory();
-  }, [originalImage]); // 只在组件加载和 originalImage 改变时重新加载
+  }, [initialLoadComplete, originalImage, urlParam]);
 
   // 创建缩略图
   const createThumbnail = async (imageUrl: string): Promise<string> => {
@@ -1030,7 +1092,7 @@ export default function EditPage() {
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center space-x-2">
             <div className="relative w-10 h-10 rounded-xl bg-gradient-to-r from-purple-500 to-cyan-500 flex items-center justify-center transform hover:rotate-180 transition-transform duration-500">
-              <Crop className="w-5 h-5 text-white" />
+              <Crop className="w-5 h-5" />
             </div>
             <span className="font-bold text-xl bg-gradient-to-r from-purple-400 to-cyan-400 text-transparent bg-clip-text">
               magic crop
@@ -1066,7 +1128,9 @@ export default function EditPage() {
                 {editHistory.slice(0, 3).map((item) => (
                   <div
                     key={item.id}
-                    className="relative h-full aspect-square rounded-lg overflow-hidden cursor-pointer group"
+                    className={`relative h-full aspect-square rounded-lg overflow-hidden cursor-pointer group ${
+                      originalImage === item.image ? 'ring-2 ring-purple-500' : ''
+                    }`}
                     onClick={() => handleSelectHistoryImage(item)}
                   >
                     <img
@@ -1075,6 +1139,9 @@ export default function EditPage() {
                       className="w-full h-full object-cover transition-transform group-hover:scale-105"
                     />
                     <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    {originalImage === item.image && (
+                      <div className="absolute top-1 right-1 w-3 h-3 bg-purple-500 rounded-full"></div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -1105,7 +1172,7 @@ export default function EditPage() {
                               sizeIndicator.textContent = `${img.naturalWidth} × ${img.naturalHeight}`;
                             }
                             if (isCropping) {
-                              handleStartCrop();
+                              handleManualCrop();
                             }
                           }}
                         />
